@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bewerbungsmanager - Tool Hub</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Bewerbungsmanager</h1>
+    <div class="top-controls">
+      <input id="search" placeholder="Sofortsuche: Firma, Stelle, Tags..." />
+      <button id="newBtn">Neue Bewerbung</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="view-tabs">
+      <button class="tab-btn active" data-view="list">📋 Liste</button>
+      <button class="tab-btn" data-view="dashboard">📊 Dashboard</button>
+    </nav>
+
+    <div class="main-content">
+      <section id="list-view" class="view-section active">
+        <div class="filters">
+          <select id="filterStatus"><option value="">Alle Status</option></select>
+          <select id="filterPriority"><option value="">Alle Prioritäten</option><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select>
+          <input id="filterTag" placeholder="Filter Tag" />
+          <select id="sortBy"><option value="date_desc">Datum ↓</option><option value="date_asc">Datum ↑</option><option value="company">Unternehmen</option></select>
+        </div>
+
+        <ul id="list" class="apps"></ul>
+      </section>
+
+      <section id="dashboard-view" class="view-section">
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-label">Response-Rate</div>
+            <div class="stat-value" id="responseRate">-</div>
+            <div class="stat-desc" id="responseRateDesc"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Ø Zeit bis Response</div>
+            <div class="stat-value" id="avgResponseTime">-</div>
+            <div class="stat-desc">Tage</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Erfolgsquote</div>
+            <div class="stat-value" id="successRate">-</div>
+            <div class="stat-desc">Angebote / Bewerbungen</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Diese Woche</div>
+            <div class="stat-value" id="weekCount">0</div>
+            <div class="stat-desc">neue Bewerbungen</div>
+          </div>
+        </div>
+
+        <div class="dashboard-section">
+          <h3>Bewerbungs-Funnel (Konversionsrate)</h3>
+          <div class="funnel-chart" id="funnelChart"></div>
+        </div>
+
+        <div class="dashboard-section">
+          <h3>Status-Trend</h3>
+          <div class="chart-container">
+            <canvas id="chartTrend"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <aside class="right">
+        <div class="counts">
+          <div>Alle: <span id="countAll">0</span></div>
+          <div>Offen: <span id="countOpen">0</span></div>
+          <div>Interviews: <span id="countInterview">0</span></div>
+          <div>Angebote: <span id="countOffer">0</span></div>
+          <div>Absagen: <span id="countReject">0</span></div>
+          <div>Entwürfe: <span id="countDraft">0</span></div>
+        </div>
+
+        <h3>Diagramme</h3>
+        <canvas id="chartMonths" height="120"></canvas>
+        <canvas id="chartStatus" height="120"></canvas>
+
+        <h3>Erinnerungen</h3>
+        <ul id="reminders"></ul>
+      </aside>
+    </div>
+  </main>
+
+  <template id="appItem">
+    <li class="app">
+      <div class="meta">
+        <strong class="company"></strong>
+        <div class="position"></div>
+      </div>
+      <div class="meta2">
+        <div class="date"></div>
+        <div class="status"></div>
+      </div>
+      <div class="actions">
+        <button class="edit">✏️</button>
+        <button class="del">🗑️</button>
+      </div>
+    </li>
+  </template>
+
+  <div id="modal" class="modal hidden">
+    <form id="form" class="card">
+      <h2 id="formTitle">Neue Bewerbung</h2>
+      <label>Unternehmen <input name="company" required /></label>
+      <label>Position <input name="position" /></label>
+      <label>Datum <input type="date" name="date" /></label>
+      <label>Status <select name="status"></select></label>
+      <label>Priorität <select name="priority"><option></option><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select></label>
+      <label>Tags <input name="tags" placeholder="Komma-getrennt" /></label>
+      <label>Notizen <textarea name="notes" placeholder="Allgemeine Notizen..."></textarea></label>
+      <label>Anhänge <input type="file" name="files" multiple /></label>
+      <label>Erinnerung (Termin) <input type="datetime-local" name="reminder" /></label>
+      <button type="button" class="btn-secondary" id="notesBtn">📝 Intelligente Notizen</button>
+      <div class="form-actions">
+        <button type="submit">Speichern</button>
+        <button type="button" id="cancel">Abbrechen</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="notesModal" class="modal hidden">
+    <div class="card notes-card">
+      <h2>Intelligente Notizen</h2>
+      <div class="notes-tabs">
+        <button class="notes-tab-btn active" data-notes-tab="templates">📋 Templates</button>
+        <button class="notes-tab-btn" data-notes-tab="interview">🎤 Interviews</button>
+        <button class="notes-tab-btn" data-notes-tab="feedback">💬 Feedback</button>
+        <button class="notes-tab-btn" data-notes-tab="history">📜 Historie</button>
+      </div>
+
+      <div id="templates-tab" class="notes-tab active">
+        <h3>Vorlage auswählen:</h3>
+        <div class="template-buttons">
+          <button type="button" class="template-btn" data-template="interview">🎤 Interview-Vorbereitung</button>
+          <button type="button" class="template-btn" data-template="feedback">💬 Feedback erfassen</button>
+          <button type="button" class="template-btn" data-template="followup">👉 Nachfass-Notiz</button>
+        </div>
+      </div>
+
+      <div id="interview-tab" class="notes-tab">
+        <h3>Interview-Notizen</h3>
+        <div class="note-list" id="interviewNotes"></div>
+        <textarea id="interviewText" placeholder="- Gesprächspartner:&#10;- Wichtige Punkte:&#10;- Fragen gestellt:&#10;- Nächste Schritte:"></textarea>
+        <button type="button" class="btn-primary" id="saveInterview">Interview speichern</button>
+      </div>
+
+      <div id="feedback-tab" class="notes-tab">
+        <h3>Feedback & Learnings</h3>
+        <label>Art des Feedbacks:</label>
+        <select id="feedbackType">
+          <option value="rejection">❌ Absage - Grund?</option>
+          <option value="success">✅ Erfolg - Was hat geklappt?</option>
+          <option value="experience">🎓 Learnings - Was mitnehmen?</option>
+        </select>
+        <textarea id="feedbackText" placeholder="Beschreibe dein Feedback..."></textarea>
+        <button type="button" class="btn-primary" id="saveFeedback">Feedback speichern</button>
+        <div class="note-list" id="feedbackNotes"></div>
+      </div>
+
+      <div id="history-tab" class="notes-tab">
+        <h3>Alle Notizen</h3>
+        <div class="note-list" id="notesHistory"></div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" id="closeNotesBtn" class="btn-secondary">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
