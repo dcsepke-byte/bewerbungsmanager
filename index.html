@@ -6,6 +6,7 @@
   <title>Bewerbungsmanager - Tool Hub</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <header>
@@ -13,6 +14,7 @@
     <div class="top-controls">
       <input id="search" placeholder="Sofortsuche: Firma, Stelle, Tags..." />
       <button id="newBtn">Neue Bewerbung</button>
+      <button id="importBtn">📄 Aus Word importieren</button>
     </div>
   </header>
 
@@ -126,6 +128,35 @@
         <button type="button" id="cancel">Abbrechen</button>
       </div>
     </form>
+  </div>
+
+  <div id="importModal" class="modal hidden">
+    <div class="card">
+      <h2>Word-Datei importieren</h2>
+      <p>Wähle eine .docx Datei aus. Wir extrahieren automatisch:</p>
+      <ul>
+        <li>🏢 Unternehmen (erste fett formatierte Zeile)</li>
+        <li>💼 Position/Stelle</li>
+        <li>📅 Datum (falls vorhanden)</li>
+        <li>📝 Notizen (Dokumentinhalt)</li>
+      </ul>
+      <label>Word-Datei auswählen:
+        <input type="file" id="importFile" accept=".docx,.doc" />
+      </label>
+      <div id="importPreview" class="import-preview hidden">
+        <h3>Vorschau der importierten Daten:</h3>
+        <div class="preview-fields">
+          <div><strong>Unternehmen:</strong> <span id="previewCompany">-</span></div>
+          <div><strong>Position:</strong> <span id="previewPosition">-</span></div>
+          <div><strong>Datum:</strong> <span id="previewDate">-</span></div>
+          <div><strong>Notizen (gekürzt):</strong> <span id="previewNotes">-</span></div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="confirmImport" class="hidden">Importieren</button>
+        <button type="button" id="cancelImport">Schließen</button>
+      </div>
+    </div>
   </div>
 
   <div id="notesModal" class="modal hidden">
