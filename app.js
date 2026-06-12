@@ -202,13 +202,55 @@
       }
     }
     
-    // Look for position keywords
-    const positionKeywords = ['position', 'stelle', 'role', 'job', 'engineer', 'developer', 'designer', 'manager', 'analyst']
+    // Improved position detection - look for position keywords but be smarter about matches
+    const positionKeywords = [
+      'stelle', 'position', 'role', 'job', 'beruf', 'posten',
+      'engineer', 'developer', 'designer', 'manager', 'analyst', 
+      'praktikant', 'berater', 'sachbearbeiter', 'koordinator',
+      'senior', 'junior', 'associate', 'specialist'
+    ]
+    
+    // First pass: look for lines that START or STRONGLY match position keywords
     for (let i = 0; i < lines.length; i++) {
-      const lowerLine = lines[i].toLowerCase()
-      if (positionKeywords.some(kw => lowerLine.includes(kw))) {
-        data.position = lines[i]
+      const line = lines[i]
+      const lowerLine = line.toLowerCase()
+      
+      // Skip very short or very long lines (likely not a position)
+      if (line.length < 3 || line.length > 150) continue
+      
+      // Check if line STARTS with position keyword or has it prominently
+      const startsWithKeyword = positionKeywords.some(kw => lowerLine.startsWith(kw))
+      if (startsWithKeyword) {
+        data.position = line
         break
+      }
+      
+      // Check for position-like patterns (e.g., "Senior Developer", "Jr. Accountant")
+      const hasPositionPattern = /^(senior|junior|jr|lead|head|chief|assistant|associate|trainee|intern|apprentice)\b/i.test(line)
+      if (hasPositionPattern && !lowerLine.includes('manager') || lowerLine.includes('job')) {
+        data.position = line
+        break
+      }
+    }
+    
+    // Second pass: if not found, look for keywords anywhere in lines
+    if (!data.position) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const lowerLine = line.toLowerCase()
+        
+        // Skip very short or very long lines
+        if (line.length < 3 || line.length > 150) continue
+        
+        // Look for strong job title indicators
+        if (positionKeywords.some(kw => lowerLine.includes(kw))) {
+          // Avoid taking lines that are just keywords within paragraphs
+          const wordCount = line.split(/\s+/).length
+          if (wordCount <= 5) {
+            data.position = line
+            break
+          }
+        }
       }
     }
     
