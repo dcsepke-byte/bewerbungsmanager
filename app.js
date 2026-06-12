@@ -7,6 +7,7 @@
   const searchEl = document.getElementById('search')
   const listEl = document.getElementById('list')
   const newBtn = document.getElementById('newBtn')
+  const importBtn = document.getElementById('importBtn')
   const modal = document.getElementById('modal')
   const form = document.getElementById('form')
   const formTitle = document.getElementById('formTitle')
@@ -28,6 +29,13 @@
 
   const remindersEl = document.getElementById('reminders')
 
+  // DOM - Import Modal
+  const importModal = document.getElementById('importModal')
+  const importFile = document.getElementById('importFile')
+  const importPreview = document.getElementById('importPreview')
+  const confirmImport = document.getElementById('confirmImport')
+  const cancelImport = document.getElementById('cancelImport')
+
   // DOM - Notes Modal
   const notesModal = document.getElementById('notesModal')
   const notesBtn = document.getElementById('notesBtn')
@@ -46,6 +54,7 @@
   // App state
   let apps = []
   let editingId = null
+  let importedData = null
 
   function load(){
     try { apps = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch(e) { apps = [] }
@@ -91,6 +100,19 @@
     editingId = null
   }
 
+  function openImportModal(){
+    importModal.classList.remove('hidden')
+    importFile.value = ''
+    importPreview.classList.add('hidden')
+    confirmImport.classList.add('hidden')
+    importedData = null
+  }
+
+  function closeImportModal(){
+    importModal.classList.add('hidden')
+    importedData = null
+  }
+
   function openNotesModal(){
     notesModal.classList.remove('hidden')
     renderNotesUI()
@@ -98,6 +120,106 @@
 
   function closeNotesModal(){
     notesModal.classList.add('hidden')
+  }
+
+  // Word Import Functions
+  async function extractTextFromDocx(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const arrayBuffer = e.target.result
+          const zip = await JSZip.loadAsync(arrayBuffer)
+          
+          // Read document.xml
+          const docXml = await zip.file('word/document.xml').async('string')
+          const parser = new DOMParser()
+          const xmlDoc = parser.parseFromString(docXml, 'application/xml')
+          
+          // Extract text from paragraphs
+          const paragraphs = xmlDoc.getElementsByTagName('w:p')
+          let text = ''
+          let boldTexts = []
+          
+          for (let p of paragraphs) {
+            let paragraphText = ''
+            let isBold = false
+            const runs = p.getElementsByTagName('w:r')
+            
+            for (let r of runs) {
+              const rPr = r.getElementsByTagName('w:rPr')[0]
+              if (rPr) {
+                const bold = rPr.getElementsByTagName('w:b')[0]
+                if (bold) isBold = true
+              }
+              
+              const textElements = r.getElementsByTagName('w:t')
+              for (let t of textElements) {
+                paragraphText += t.textContent
+              }
+            }
+            
+            if (paragraphText) {
+              text += paragraphText + '\n'
+              if (isBold && boldTexts.length < 3) {
+                boldTexts.push(paragraphText.trim())
+              }
+            }
+          }
+          
+          resolve({ text, boldTexts })
+        } catch (err) {
+          reject(err)
+        }
+      }
+      reader.onerror = reject
+      reader.readAsArrayBuffer(file)
+    })
+  }
+
+  function parseImportedData(text, boldTexts) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    
+    const data = {
+      company: '',
+      position: '',
+      date: '',
+      notes: text
+    }
+    
+    // Extract company from bold text or first meaningful line
+    if (boldTexts.length > 0) {
+      data.company = boldTexts[0]
+    }
+    
+    // Look for common patterns
+    const companyKeywords = ['gmbh', 'ag', 'inc', 'ltd', 'group', 'company']
+    for (let line of lines) {
+      const lowerLine = line.toLowerCase()
+      if (companyKeywords.some(kw => lowerLine.includes(kw))) {
+        data.company = line
+        break
+      }
+    }
+    
+    // Look for position keywords
+    const positionKeywords = ['position', 'stelle', 'role', 'job', 'engineer', 'developer', 'designer', 'manager', 'analyst']
+    for (let i = 0; i < lines.length; i++) {
+      const lowerLine = lines[i].toLowerCase()
+      if (positionKeywords.some(kw => lowerLine.includes(kw))) {
+        data.position = lines[i]
+        break
+      }
+    }
+    
+    // Look for dates (DD.MM.YYYY or YYYY-MM-DD format)
+    const datePattern = /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}|\d{4}[.\/-]\d{1,2}[.\/-]\d{1,2})/g
+    const dateMatches = text.match(datePattern)
+    if (dateMatches) {
+      data.date = dateMatches[0]
+    }
+    
+    return data
   }
 
   function renderNotesUI(){
@@ -404,6 +526,59 @@
     renderAll()
   })
 
+  // Import handling
+  importBtn.addEventListener('click', openImportModal)
+  cancelImport.addEventListener('click', closeImportModal)
+
+  importFile.addEventListener('change', async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    try {
+      const { text, boldTexts } = await extractTextFromDocx(file)
+      importedData = parseImportedData(text, boldTexts)
+      
+      // Show preview
+      document.getElementById('previewCompany').textContent = importedData.company || '(nicht gefunden)'
+      document.getElementById('previewPosition').textContent = importedData.position || '(nicht gefunden)'
+      document.getElementById('previewDate').textContent = importedData.date || '(nicht gefunden)'
+      document.getElementById('previewNotes').textContent = importedData.notes.substring(0, 100) + '...'
+      
+      importPreview.classList.remove('hidden')
+      confirmImport.classList.remove('hidden')
+    } catch (err) {
+      alert('Fehler beim Lesen der Datei: ' + err.message)
+      console.error(err)
+    }
+  })
+
+  confirmImport.addEventListener('click', () => {
+    if (!importedData) return
+    
+    const obj = {
+      id: id(),
+      company: importedData.company,
+      position: importedData.position,
+      date: importedData.date,
+      status: 'Entwurf',
+      priority: '',
+      tags: [],
+      notes: importedData.notes,
+      reminder: null,
+      attachments: [],
+      history: [],
+      notes_interviews: [],
+      notes_feedback: []
+    }
+    
+    pushHistory(obj, 'Aus Word importiert')
+    apps.push(obj)
+    save()
+    closeImportModal()
+    renderAll()
+    alert('✅ Bewerbung erfolgreich importiert!')
+  })
+
   // Notes modal
   notesBtn.addEventListener('click',()=>openNotesModal())
   closeNotesBtn.addEventListener('click',()=>closeNotesModal())
@@ -421,7 +596,7 @@
     btn.addEventListener('click',()=>{
       const template = btn.dataset.template
       if(template==='interview'){
-        interviewText.value = '- Gesprächspartner:\n- Unternehmensgröße/Struktur:\n- Wichtige Punkte vom Gespräch:\n- Fragen, die mir gestellt wurden:\n- Meine Fragen an das Unternehmen:\n- Nächste Schritte:\n- Eindruck:'
+        interviewText.value = '- Gesprächspartner:\n- Unternehmensgröße/Struktur:\n- Wichtige Punkte vom Gespräch:\n- Fragen, die mir gestellt wurden:\n- Meine Fragen an das Unternehmen:\n- Nächste Schritte:'
       } else if(template==='feedback'){
         feedbackText.value = 'Schreib dein Feedback und Learnings auf...'
       } else if(template==='followup'){
